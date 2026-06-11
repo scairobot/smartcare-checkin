@@ -1,0 +1,747 @@
+<!DOCTYPE html>
+<html lang="zh-TW">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>實康打卡系統</title>
+
+  <!-- LINE LIFF SDK -->
+  <script src="https://static.line-scdn.net/liff/edge/2/sdk.js"></script>
+
+  <style>
+    /* ── 設計語言：診所制服白 × 實康綠 × 清晰易讀 ── */
+    :root {
+      --green:      #2E7D5E;
+      --green-mid:  #3A9970;
+      --green-light:#E8F5EE;
+      --text:       #1A1A1A;
+      --text-sub:   #6B7280;
+      --border:     #D1D5DB;
+      --white:      #FFFFFF;
+      --error:      #DC2626;
+      --success:    #2E7D5E;
+      --radius:     14px;
+    }
+
+    * { box-sizing: border-box; margin: 0; padding: 0; }
+
+    body {
+      font-family: -apple-system, 'Helvetica Neue', Arial, sans-serif;
+      background: var(--green-light);
+      min-height: 100vh;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      padding: 24px 16px;
+    }
+
+    .card {
+      background: var(--white);
+      border-radius: var(--radius);
+      padding: 32px 24px;
+      width: 100%;
+      max-width: 360px;
+      box-shadow: 0 4px 24px rgba(0,0,0,0.08);
+    }
+
+    /* 頂部 Logo 區 */
+    .header {
+      text-align: center;
+      margin-bottom: 28px;
+    }
+
+    .logo-mark {
+      width: 56px;
+      height: 56px;
+      background: var(--green);
+      border-radius: 16px;
+      display: inline-flex;
+      align-items: center;
+      justify-content: center;
+      margin-bottom: 12px;
+    }
+
+    .logo-mark svg {
+      width: 30px;
+      height: 30px;
+      fill: none;
+      stroke: white;
+      stroke-width: 2.2;
+      stroke-linecap: round;
+      stroke-linejoin: round;
+    }
+
+    .clinic-name {
+      font-size: 15px;
+      font-weight: 700;
+      color: var(--text);
+      letter-spacing: 0.04em;
+    }
+
+    .system-name {
+      font-size: 12px;
+      color: var(--text-sub);
+      margin-top: 2px;
+    }
+
+    /* 員工資訊 */
+    .employee-info {
+      background: var(--green-light);
+      border-radius: 10px;
+      padding: 12px 16px;
+      margin-bottom: 24px;
+      display: flex;
+      align-items: center;
+      gap: 10px;
+    }
+
+    .avatar {
+      width: 36px;
+      height: 36px;
+      border-radius: 50%;
+      background: var(--green);
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      color: white;
+      font-size: 14px;
+      font-weight: 700;
+      flex-shrink: 0;
+      overflow: hidden;
+    }
+
+    .avatar img {
+      width: 100%;
+      height: 100%;
+      object-fit: cover;
+    }
+
+    .employee-name {
+      font-size: 15px;
+      font-weight: 600;
+      color: var(--text);
+    }
+
+    .employee-sub {
+      font-size: 12px;
+      color: var(--text-sub);
+      margin-top: 1px;
+    }
+
+    /* 打卡類型選擇 */
+    .section-label {
+      font-size: 12px;
+      font-weight: 600;
+      color: var(--text-sub);
+      text-transform: uppercase;
+      letter-spacing: 0.06em;
+      margin-bottom: 10px;
+    }
+
+    .type-grid {
+      display: grid;
+      grid-template-columns: 1fr 1fr;
+      gap: 10px;
+      margin-bottom: 24px;
+    }
+
+    .type-btn {
+      border: 2px solid var(--border);
+      border-radius: 10px;
+      padding: 14px 10px;
+      background: var(--white);
+      cursor: pointer;
+      text-align: center;
+      transition: border-color 0.15s, background 0.15s;
+      -webkit-tap-highlight-color: transparent;
+    }
+
+    .type-btn:active {
+      transform: scale(0.97);
+    }
+
+    .type-btn.selected {
+      border-color: var(--green);
+      background: var(--green-light);
+    }
+
+    .type-icon {
+      font-size: 22px;
+      margin-bottom: 4px;
+    }
+
+    .type-label {
+      font-size: 13px;
+      font-weight: 600;
+      color: var(--text);
+    }
+
+    .type-sub {
+      font-size: 11px;
+      color: var(--text-sub);
+      margin-top: 2px;
+    }
+
+    /* GPS 狀態 */
+    .gps-status {
+      display: flex;
+      align-items: center;
+      gap: 8px;
+      padding: 10px 14px;
+      border-radius: 8px;
+      font-size: 13px;
+      margin-bottom: 20px;
+    }
+
+    .gps-status.checking {
+      background: #FEF3C7;
+      color: #92400E;
+    }
+
+    .gps-status.ok {
+      background: var(--green-light);
+      color: var(--green);
+    }
+
+    .gps-status.error {
+      background: #FEE2E2;
+      color: var(--error);
+    }
+
+    .gps-dot {
+      width: 8px;
+      height: 8px;
+      border-radius: 50%;
+      flex-shrink: 0;
+    }
+
+    .gps-status.checking .gps-dot { background: #F59E0B; animation: pulse 1s infinite; }
+    .gps-status.ok .gps-dot       { background: var(--green); }
+    .gps-status.error .gps-dot    { background: var(--error); }
+
+    @keyframes pulse {
+      0%, 100% { opacity: 1; }
+      50%       { opacity: 0.3; }
+    }
+
+    /* 確認按鈕 */
+    .submit-btn {
+      width: 100%;
+      padding: 16px;
+      background: var(--green);
+      color: white;
+      border: none;
+      border-radius: 10px;
+      font-size: 16px;
+      font-weight: 700;
+      cursor: pointer;
+      letter-spacing: 0.03em;
+      transition: background 0.15s, opacity 0.15s;
+    }
+
+    .submit-btn:disabled {
+      opacity: 0.4;
+      cursor: not-allowed;
+    }
+
+    .submit-btn:not(:disabled):active {
+      background: var(--green-mid);
+    }
+
+    /* 時間顯示 */
+    .time-display {
+      text-align: center;
+      margin-bottom: 20px;
+    }
+
+    .time-main {
+      font-size: 36px;
+      font-weight: 300;
+      color: var(--text);
+      letter-spacing: -0.02em;
+      font-variant-numeric: tabular-nums;
+    }
+
+    .time-date {
+      font-size: 13px;
+      color: var(--text-sub);
+      margin-top: 2px;
+    }
+
+    /* 成功畫面 */
+    .success-screen {
+      text-align: center;
+      padding: 8px 0;
+    }
+
+    .success-icon {
+      width: 64px;
+      height: 64px;
+      background: var(--green-light);
+      border-radius: 50%;
+      display: inline-flex;
+      align-items: center;
+      justify-content: center;
+      margin-bottom: 16px;
+    }
+
+    .success-icon svg {
+      width: 32px;
+      height: 32px;
+      stroke: var(--green);
+      stroke-width: 2.5;
+      fill: none;
+      stroke-linecap: round;
+      stroke-linejoin: round;
+    }
+
+    .success-title {
+      font-size: 20px;
+      font-weight: 700;
+      color: var(--text);
+      margin-bottom: 6px;
+    }
+
+    .success-detail {
+      font-size: 14px;
+      color: var(--text-sub);
+      line-height: 1.6;
+    }
+
+    .success-tag {
+      display: inline-block;
+      background: var(--green-light);
+      color: var(--green);
+      font-size: 13px;
+      font-weight: 600;
+      padding: 4px 12px;
+      border-radius: 20px;
+      margin-top: 10px;
+    }
+
+    /* 錯誤畫面 */
+    .error-screen {
+      text-align: center;
+      padding: 8px 0;
+    }
+
+    .error-icon {
+      width: 64px;
+      height: 64px;
+      background: #FEE2E2;
+      border-radius: 50%;
+      display: inline-flex;
+      align-items: center;
+      justify-content: center;
+      margin-bottom: 16px;
+    }
+
+    .error-icon svg {
+      width: 32px;
+      height: 32px;
+      stroke: var(--error);
+      stroke-width: 2.5;
+      fill: none;
+      stroke-linecap: round;
+      stroke-linejoin: round;
+    }
+
+    .error-title {
+      font-size: 18px;
+      font-weight: 700;
+      color: var(--text);
+      margin-bottom: 6px;
+    }
+
+    .error-detail {
+      font-size: 14px;
+      color: var(--text-sub);
+      line-height: 1.6;
+      margin-bottom: 20px;
+    }
+
+    .retry-btn {
+      width: 100%;
+      padding: 14px;
+      background: transparent;
+      color: var(--green);
+      border: 2px solid var(--green);
+      border-radius: 10px;
+      font-size: 15px;
+      font-weight: 600;
+      cursor: pointer;
+    }
+
+    /* 載入畫面 */
+    .loading-screen {
+      text-align: center;
+      padding: 16px 0;
+    }
+
+    .spinner {
+      width: 36px;
+      height: 36px;
+      border: 3px solid var(--border);
+      border-top-color: var(--green);
+      border-radius: 50%;
+      animation: spin 0.8s linear infinite;
+      margin: 0 auto 16px;
+    }
+
+    @keyframes spin {
+      to { transform: rotate(360deg); }
+    }
+
+    .loading-text {
+      font-size: 14px;
+      color: var(--text-sub);
+    }
+
+    .hidden { display: none; }
+  </style>
+</head>
+<body>
+
+<div class="card">
+
+  <!-- ══ 載入中畫面 ══ -->
+  <div id="screen-loading">
+    <div class="header">
+      <div class="logo-mark">
+        <svg viewBox="0 0 24 24"><path d="M12 2L2 7l10 5 10-5-10-5z"/><path d="M2 17l10 5 10-5"/><path d="M2 12l10 5 10-5"/></svg>
+      </div>
+      <div class="clinic-name">實康復健科診所</div>
+      <div class="system-name">員工出勤打卡系統</div>
+    </div>
+    <div class="loading-screen">
+      <div class="spinner"></div>
+      <div class="loading-text">初始化中，請稍候⋯</div>
+    </div>
+  </div>
+
+  <!-- ══ 打卡主畫面 ══ -->
+  <div id="screen-main" class="hidden">
+    <div class="header">
+      <div class="logo-mark">
+        <svg viewBox="0 0 24 24"><path d="M12 2L2 7l10 5 10-5-10-5z"/><path d="M2 17l10 5 10-5"/><path d="M2 12l10 5 10-5"/></svg>
+      </div>
+      <div class="clinic-name">實康復健科診所</div>
+      <div class="system-name">員工出勤打卡系統</div>
+    </div>
+
+    <!-- 時間 -->
+    <div class="time-display">
+      <div class="time-main" id="clock">--:--</div>
+      <div class="time-date" id="dateLabel">載入中</div>
+    </div>
+
+    <!-- 員工資訊 -->
+    <div class="employee-info">
+      <div class="avatar" id="avatarEl">?</div>
+      <div>
+        <div class="employee-name" id="employeeName">識別中⋯</div>
+        <div class="employee-sub" id="employeeSub">請稍候</div>
+      </div>
+    </div>
+
+    <!-- GPS 狀態 -->
+    <div class="gps-status checking" id="gpsStatus">
+      <div class="gps-dot"></div>
+      <span id="gpsText">正在取得位置⋯</span>
+    </div>
+
+    <!-- 打卡類型 -->
+    <div class="section-label">選擇打卡類型</div>
+    <div class="type-grid">
+      <button class="type-btn" onclick="selectType(this, '上班')">
+        <div class="type-icon">🟢</div>
+        <div class="type-label">上班</div>
+        <div class="type-sub">開始工作</div>
+      </button>
+      <button class="type-btn" onclick="selectType(this, '下班')">
+        <div class="type-icon">🔵</div>
+        <div class="type-label">下班</div>
+        <div class="type-sub">結束工作</div>
+      </button>
+      <button class="type-btn" onclick="selectType(this, '兩頭班－出')">
+        <div class="type-icon">🟡</div>
+        <div class="type-label">兩頭班－出</div>
+        <div class="type-sub">中間離開</div>
+      </button>
+      <button class="type-btn" onclick="selectType(this, '兩頭班－回')">
+        <div class="type-icon">🟠</div>
+        <div class="type-label">兩頭班－回</div>
+        <div class="type-sub">中間返回</div>
+      </button>
+    </div>
+
+    <!-- 確認按鈕 -->
+    <button class="submit-btn" id="submitBtn" disabled onclick="submitCheckin()">
+      選擇打卡類型後確認
+    </button>
+  </div>
+
+  <!-- ══ 成功畫面 ══ -->
+  <div id="screen-success" class="hidden">
+    <div class="success-screen">
+      <div class="success-icon">
+        <svg viewBox="0 0 24 24"><polyline points="20 6 9 17 4 12"/></svg>
+      </div>
+      <div class="success-title">打卡成功</div>
+      <div class="success-detail" id="successDetail"></div>
+      <div class="success-tag" id="successTag"></div>
+    </div>
+  </div>
+
+  <!-- ══ 錯誤畫面 ══ -->
+  <div id="screen-error" class="hidden">
+    <div class="error-screen">
+      <div class="error-icon">
+        <svg viewBox="0 0 24 24"><circle cx="12" cy="12" r="10"/><line x1="12" y1="8" x2="12" y2="12"/><line x1="12" y1="16" x2="12.01" y2="16"/></svg>
+      </div>
+      <div class="error-title" id="errorTitle">發生錯誤</div>
+      <div class="error-detail" id="errorDetail"></div>
+      <button class="retry-btn" onclick="location.reload()">重試</button>
+    </div>
+  </div>
+
+</div>
+
+<script>
+// ════════════════════════════════════════════
+// ▼▼▼  請填入以下設定值  ▼▼▼
+// ════════════════════════════════════════════
+
+const CONFIG = {
+  LIFF_ID:         "YOUR_LIFF_ID",           // LINE Developers → LIFF ID
+  APPS_SCRIPT_URL: "YOUR_APPS_SCRIPT_URL",   // Apps Script 部署網址
+  CLINIC_LAT:      25.0000,                  // 診所緯度（Google Maps 查詢）
+  CLINIC_LNG:      121.0000,                 // 診所經度（Google Maps 查詢）
+  ALLOWED_RADIUS:  300,                      // 允許範圍（公尺）
+};
+
+// ════════════════════════════════════════════
+// ▲▲▲  設定值到此結束  ▲▲▲
+// ════════════════════════════════════════════
+
+let state = {
+  lineUid:      null,
+  displayName:  null,
+  pictureUrl:   null,
+  employeeName: null,
+  gpsOk:        false,
+  lat:          null,
+  lng:          null,
+  checkinType:  null,
+};
+
+// ── 畫面切換 ──
+function showScreen(id) {
+  ['screen-loading','screen-main','screen-success','screen-error']
+    .forEach(s => document.getElementById(s).classList.add('hidden'));
+  document.getElementById(id).classList.remove('hidden');
+}
+
+// ── 時鐘 ──
+function startClock() {
+  const weekdays = ['日','一','二','三','四','五','六'];
+  function tick() {
+    const now = new Date();
+    const hh = String(now.getHours()).padStart(2,'0');
+    const mm = String(now.getMinutes()).padStart(2,'0');
+    document.getElementById('clock').textContent = `${hh}:${mm}`;
+    document.getElementById('dateLabel').textContent =
+      `${now.getFullYear()}年${now.getMonth()+1}月${now.getDate()}日（週${weekdays[now.getDay()]}）`;
+  }
+  tick();
+  setInterval(tick, 1000);
+}
+
+// ── GPS 距離計算（Haversine）──
+function calcDistance(lat1, lng1, lat2, lng2) {
+  const R = 6371000;
+  const dLat = (lat2 - lat1) * Math.PI / 180;
+  const dLng = (lng2 - lng1) * Math.PI / 180;
+  const a = Math.sin(dLat/2)**2 +
+            Math.cos(lat1*Math.PI/180) * Math.cos(lat2*Math.PI/180) * Math.sin(dLng/2)**2;
+  return R * 2 * Math.atan2(Math.sqrt(a), Math.sqrt(1-a));
+}
+
+// ── 取得 GPS ──
+function getGPS() {
+  return new Promise((resolve, reject) => {
+    if (!navigator.geolocation) {
+      reject(new Error('此裝置不支援定位功能'));
+      return;
+    }
+    navigator.geolocation.getCurrentPosition(
+      pos => resolve({ lat: pos.coords.latitude, lng: pos.coords.longitude }),
+      err => {
+        if (err.code === 1) reject(new Error('請允許定位權限後重試'));
+        else                reject(new Error('無法取得位置，請確認 GPS 已開啟'));
+      },
+      { enableHighAccuracy: true, timeout: 10000, maximumAge: 0 }
+    );
+  });
+}
+
+// ── 更新 GPS 狀態 UI ──
+function setGpsUI(status, text) {
+  const el = document.getElementById('gpsStatus');
+  el.className = `gps-status ${status}`;
+  document.getElementById('gpsText').textContent = text;
+}
+
+// ── 打卡類型選擇 ──
+function selectType(btn, type) {
+  document.querySelectorAll('.type-btn').forEach(b => b.classList.remove('selected'));
+  btn.classList.add('selected');
+  state.checkinType = type;
+  updateSubmitBtn();
+}
+
+function updateSubmitBtn() {
+  const btn = document.getElementById('submitBtn');
+  if (state.checkinType && state.gpsOk) {
+    btn.disabled = false;
+    btn.textContent = `確認${state.checkinType}打卡`;
+  } else if (state.checkinType && !state.gpsOk) {
+    btn.disabled = true;
+    btn.textContent = '等待位置驗證⋯';
+  } else {
+    btn.disabled = true;
+    btn.textContent = '請選擇打卡類型';
+  }
+}
+
+// ── 送出打卡 ──
+async function submitCheckin() {
+  const btn = document.getElementById('submitBtn');
+  btn.disabled = true;
+  btn.textContent = '送出中⋯';
+
+  const payload = {
+    action:       'checkin',
+    lineUid:      state.lineUid,
+    displayName:  state.displayName,
+    employeeName: state.employeeName,
+    checkinType:  state.checkinType,
+    lat:          state.lat,
+    lng:          state.lng,
+    timestamp:    new Date().toISOString(),
+  };
+
+  try {
+    const res = await fetch(CONFIG.APPS_SCRIPT_URL, {
+      method: 'POST',
+      headers: { 'Content-Type': 'text/plain' },
+      body: JSON.stringify(payload),
+    });
+    const data = await res.json();
+
+    if (data.success) {
+      const now = new Date();
+      const timeStr = `${String(now.getHours()).padStart(2,'0')}:${String(now.getMinutes()).padStart(2,'0')}`;
+      document.getElementById('successDetail').textContent =
+        `${state.employeeName || state.displayName}`;
+      document.getElementById('successTag').textContent =
+        `${state.checkinType}　${timeStr}`;
+      showScreen('screen-success');
+
+      // 3 秒後關閉 LIFF
+      setTimeout(() => {
+        if (liff.isInClient()) liff.closeWindow();
+      }, 3000);
+    } else {
+      showError(data.message || '打卡失敗，請重試', data.detail || '');
+    }
+  } catch (e) {
+    showError('網路錯誤', '無法連線至伺服器，請確認網路後重試。');
+  }
+}
+
+// ── 顯示錯誤 ──
+function showError(title, detail) {
+  document.getElementById('errorTitle').textContent = title;
+  document.getElementById('errorDetail').textContent = detail;
+  showScreen('screen-error');
+}
+
+// ── 主流程 ──
+async function init() {
+  try {
+    // 初始化 LIFF
+    await liff.init({ liffId: CONFIG.LIFF_ID });
+
+    if (!liff.isLoggedIn()) {
+      liff.login({ redirectUri: location.href });
+      return;
+    }
+
+    // 取得 LINE 個人資料
+    const profile = await liff.getProfile();
+    state.lineUid     = profile.userId;
+    state.displayName = profile.displayName;
+    state.pictureUrl  = profile.pictureUrl;
+
+    // 更新頭像
+    const avatarEl = document.getElementById('avatarEl');
+    if (state.pictureUrl) {
+      avatarEl.innerHTML = `<img src="${state.pictureUrl}" alt="avatar">`;
+    } else {
+      avatarEl.textContent = state.displayName.charAt(0);
+    }
+
+    // 顯示主畫面
+    showScreen('screen-main');
+    startClock();
+
+    // 查詢員工姓名
+    try {
+      const lookupRes = await fetch(
+        `${CONFIG.APPS_SCRIPT_URL}?action=lookup&uid=${encodeURIComponent(state.lineUid)}`
+      );
+      const lookupData = await lookupRes.json();
+      if (lookupData.found) {
+        state.employeeName = lookupData.name;
+        document.getElementById('employeeName').textContent = lookupData.name;
+        document.getElementById('employeeSub').textContent = '已驗證員工身份';
+      } else {
+        document.getElementById('employeeName').textContent = state.displayName;
+        document.getElementById('employeeSub').textContent = '⚠️ 尚未完成員工註冊';
+      }
+    } catch {
+      document.getElementById('employeeName').textContent = state.displayName;
+      document.getElementById('employeeSub').textContent = 'LINE 帳號';
+    }
+
+    // 取得 GPS
+    try {
+      const pos = await getGPS();
+      state.lat = pos.lat;
+      state.lng = pos.lng;
+      const dist = calcDistance(pos.lat, pos.lng, CONFIG.CLINIC_LAT, CONFIG.CLINIC_LNG);
+
+      if (dist <= CONFIG.ALLOWED_RADIUS) {
+        state.gpsOk = true;
+        setGpsUI('ok', `位置確認（距診所 ${Math.round(dist)} 公尺）`);
+      } else {
+        state.gpsOk = false;
+        setGpsUI('error', `不在診所範圍內（距離 ${Math.round(dist)} 公尺）`);
+      }
+    } catch (gpsErr) {
+      state.gpsOk = false;
+      setGpsUI('error', gpsErr.message);
+    }
+
+    updateSubmitBtn();
+
+  } catch (err) {
+    showError('初始化失敗', err.message || '請關閉後重新掃描 QR Code');
+  }
+}
+
+init();
+</script>
+</body>
+</html>
