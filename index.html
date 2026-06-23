@@ -248,6 +248,47 @@
       background: var(--green-mid);
     }
 
+    .register-box {
+      background: #F9FAFB;
+      border: 1px solid var(--border);
+      border-radius: 10px;
+      padding: 14px;
+      margin-bottom: 20px;
+    }
+
+    .register-label {
+      font-size: 12px;
+      font-weight: 600;
+      color: var(--text-sub);
+      margin-bottom: 8px;
+    }
+
+    .register-input {
+      width: 100%;
+      border: 1px solid var(--border);
+      border-radius: 8px;
+      padding: 12px;
+      font-size: 15px;
+      margin-bottom: 10px;
+    }
+
+    .register-btn {
+      width: 100%;
+      padding: 12px;
+      background: var(--green);
+      color: white;
+      border: none;
+      border-radius: 8px;
+      font-size: 15px;
+      font-weight: 700;
+      cursor: pointer;
+    }
+
+    .register-btn:disabled {
+      opacity: 0.45;
+      cursor: not-allowed;
+    }
+
     /* 時間顯示 */
     .time-display {
       text-align: center;
@@ -450,6 +491,13 @@
       <span id="gpsText">正在取得位置⋯</span>
     </div>
 
+    <!-- 員工註冊 -->
+    <div class="register-box hidden" id="registerBox">
+      <div class="register-label">首次使用請輸入員工姓名</div>
+      <input class="register-input" id="registerName" type="text" autocomplete="name" placeholder="請輸入姓名">
+      <button class="register-btn" id="registerBtn" onclick="registerEmployee()">完成註冊</button>
+    </div>
+
     <!-- 打卡類型 -->
     <div class="section-label">選擇打卡類型</div>
     <div class="type-grid">
@@ -528,10 +576,14 @@ let state = {
   lineUid:      null,
   displayName:  null,
   pictureUrl:   null,
+  employeeId:   null,
   employeeName: null,
+  employeeActive: false,
+  employeeFound:  false,
   gpsOk:        false,
   lat:          null,
   lng:          null,
+  distance:     null,
   checkinType:  null,
 };
 
@@ -602,7 +654,13 @@ function selectType(btn, type) {
 
 function updateSubmitBtn() {
   const btn = document.getElementById('submitBtn');
-  if (state.checkinType && state.gpsOk) {
+  if (!state.employeeFound) {
+    btn.disabled = true;
+    btn.textContent = '尚未完成員工註冊';
+  } else if (!state.employeeActive) {
+    btn.disabled = true;
+    btn.textContent = '員工帳號已停用';
+  } else if (state.checkinType && state.gpsOk) {
     btn.disabled = false;
     btn.textContent = `確認${state.checkinType}打卡`;
   } else if (state.checkinType && !state.gpsOk) {
@@ -614,21 +672,92 @@ function updateSubmitBtn() {
   }
 }
 
+function setRegisterUI(visible) {
+  document.getElementById('registerBox').classList.toggle('hidden', !visible);
+}
+
+async function registerEmployee() {
+  const input = document.getElementById('registerName');
+  const btn = document.getElementById('registerBtn');
+  const name = input.value.trim();
+
+  if (!name) {
+    showError('請輸入姓名', '註冊前需要填寫員工姓名。');
+    return;
+  }
+
+  btn.disabled = true;
+  btn.textContent = '註冊中⋯';
+
+  try {
+    const res = await fetch(CONFIG.APPS_SCRIPT_URL, {
+      method: 'POST',
+      headers: { 'Content-Type': 'text/plain' },
+      body: JSON.stringify({
+        action: 'register',
+        lineUid: state.lineUid,
+        displayName: state.displayName,
+        employeeName: name,
+      }),
+    });
+    const data = await res.json();
+
+    if (!data.success) {
+      showError(data.message || '註冊失敗', data.detail || '請稍後再試，或聯絡管理者。');
+      return;
+    }
+
+    state.employeeFound = true;
+    state.employeeActive = !!data.active;
+    state.employeeId = data.employeeId || null;
+    state.employeeName = data.employeeName || name;
+    document.getElementById('employeeName').textContent = state.employeeName;
+    document.getElementById('employeeSub').textContent =
+      state.employeeId ? `已驗證員工身份｜${state.employeeId}` : '已驗證員工身份';
+    setRegisterUI(false);
+    updateSubmitBtn();
+  } catch (e) {
+    showError('註冊失敗', '無法連線至伺服器，請確認網路後重試。');
+  } finally {
+    btn.disabled = false;
+    btn.textContent = '完成註冊';
+  }
+}
+
 // ── 送出打卡 ──
 async function submitCheckin() {
   const btn = document.getElementById('submitBtn');
+
+  if (!state.employeeFound || !state.employeeActive) {
+    showError('無法打卡', '此 LINE 帳號尚未完成員工註冊，或員工狀態已停用。');
+    return;
+  }
+  if (!state.gpsOk) {
+    showError('位置未通過', '請確認定位權限與所在位置後重試。');
+    return;
+  }
+
   btn.disabled = true;
   btn.textContent = '送出中⋯';
+
+  const now = new Date();
+  const localDate = `${now.getFullYear()}/${String(now.getMonth()+1).padStart(2,'0')}/${String(now.getDate()).padStart(2,'0')}`;
+  const localTime = `${String(now.getHours()).padStart(2,'0')}:${String(now.getMinutes()).padStart(2,'0')}`;
 
   const payload = {
     action:       'checkin',
     lineUid:      state.lineUid,
     displayName:  state.displayName,
+    employeeId:   state.employeeId,
     employeeName: state.employeeName,
     checkinType:  state.checkinType,
     lat:          state.lat,
     lng:          state.lng,
-    timestamp:    new Date().toISOString(),
+    distance:     state.distance,
+    gpsOk:        state.gpsOk,
+    localDate:    localDate,
+    localTime:    localTime,
+    timestamp:    now.toISOString(),
   };
 
   try {
@@ -643,9 +772,9 @@ async function submitCheckin() {
       const now = new Date();
       const timeStr = `${String(now.getHours()).padStart(2,'0')}:${String(now.getMinutes()).padStart(2,'0')}`;
       document.getElementById('successDetail').textContent =
-        `${state.employeeName || state.displayName}`;
+        `${data.employeeName || state.employeeName || state.displayName}`;
       document.getElementById('successTag').textContent =
-        `${state.checkinType}　${timeStr}`;
+        `${data.checkinType || state.checkinType}　${data.time || timeStr}`;
       showScreen('screen-success');
 
       // 3 秒後關閉 LIFF
@@ -653,7 +782,7 @@ async function submitCheckin() {
         if (liff.isInClient()) liff.closeWindow();
       }, 3000);
     } else {
-      showError(data.message || '打卡失敗，請重試', data.detail || '');
+      showError(data.message || '打卡失敗，請重試', data.detail || '請確認員工名單、定位範圍與網路狀態。');
     }
   } catch (e) {
     showError('網路錯誤', '無法連線至伺服器，請確認網路後重試。');
@@ -702,17 +831,37 @@ async function init() {
         `${CONFIG.APPS_SCRIPT_URL}?action=lookup&uid=${encodeURIComponent(state.lineUid)}`
       );
       const lookupData = await lookupRes.json();
-      if (lookupData.found) {
+      if (lookupData.found && lookupData.active) {
+        state.employeeFound = true;
+        state.employeeActive = true;
+        state.employeeId = lookupData.employeeId || null;
         state.employeeName = lookupData.name;
         document.getElementById('employeeName').textContent = lookupData.name;
-        document.getElementById('employeeSub').textContent = '已驗證員工身份';
+        document.getElementById('employeeSub').textContent =
+          lookupData.employeeId ? `已驗證員工身份｜${lookupData.employeeId}` : '已驗證員工身份';
+        setRegisterUI(false);
+      } else if (lookupData.found && !lookupData.active) {
+        state.employeeFound = true;
+        state.employeeActive = false;
+        state.employeeId = lookupData.employeeId || null;
+        state.employeeName = lookupData.name || state.displayName;
+        document.getElementById('employeeName').textContent = state.employeeName;
+        document.getElementById('employeeSub').textContent = '⚠️ 員工帳號已停用';
+        setRegisterUI(false);
       } else {
+        state.employeeFound = false;
+        state.employeeActive = false;
         document.getElementById('employeeName').textContent = state.displayName;
-        document.getElementById('employeeSub').textContent = '⚠️ 尚未完成員工註冊';
+        document.getElementById('employeeSub').textContent = '首次使用請先註冊';
+        document.getElementById('registerName').value = state.displayName || '';
+        setRegisterUI(true);
       }
     } catch {
+      state.employeeFound = false;
+      state.employeeActive = false;
       document.getElementById('employeeName').textContent = state.displayName;
-      document.getElementById('employeeSub').textContent = 'LINE 帳號';
+      document.getElementById('employeeSub').textContent = '無法驗證員工身份';
+      setRegisterUI(false);
     }
 
     // 取得 GPS
@@ -721,6 +870,7 @@ async function init() {
       state.lat = pos.lat;
       state.lng = pos.lng;
       const dist = calcDistance(pos.lat, pos.lng, CONFIG.CLINIC_LAT, CONFIG.CLINIC_LNG);
+      state.distance = Math.round(dist);
 
       if (dist <= CONFIG.ALLOWED_RADIUS) {
         state.gpsOk = true;
